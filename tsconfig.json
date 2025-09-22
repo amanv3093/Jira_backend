@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+      "rootDir": "src",
+      "outDir": "dist",
+      "lib": ["es2020"],
+      "target": "es2020",
+      "module": "Node16",
+      "moduleResolution": "Node16",
+      "esModuleInterop": true,
+      "types": ["node"],
+      "strict": true,
+      "skipLibCheck": true,
+      "typeRoots": ["./node_modules/@types", "./types"],
+      "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts", "types/**/*.d.ts", "src/views/**/*"],
+  "exclude": ["dist", "node_modules"]
+}

@@ -19,9 +19,16 @@ model User {
   isEmailVerified Boolean        @default(false)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
-  refreshTokens   RefreshToken[]
+
  
   avatarUrl       String?
+
+  // Relations
+  refreshTokens   RefreshToken[]
+  member     Member[]
+  createdWorkspaces Workspace[]  @relation("WorkspaceOwners")
+  createdProjects   Project[]    @relation("ProjectOwners")
+  createdTasks      Task[]       @relation("TaskCreators")
 }
 
 model RefreshToken {
@@ -38,8 +45,110 @@ model RefreshToken {
   @@index([userId])    
 }
 
+model Workspace {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  createdAt DateTime   @default(now())
+
+  // Relations
+  ownerId   String     @db.ObjectId
+  owner     User       @relation("WorkspaceOwners", fields: [ownerId], references: [id])
+  projects  Project[]
+  members   Member[]
+}
+
+model Project {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  workspaceId String     @db.ObjectId
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id])
+
+  ownerId     String     @db.ObjectId
+  owner       User       @relation("ProjectOwners", fields: [ownerId], references: [id])
+
+  tasks       Task[]
+  members     Member[]
+}
+
+
+model TaskAssignment {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  taskId   String @db.ObjectId
+  memberId String @db.ObjectId
+
+  task   Task   @relation(fields: [taskId], references: [id])
+  member Member @relation(fields: [memberId], references: [id])
+
+  @@unique([taskId, memberId])
+}
+
+
+model Task {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  status      TaskStatus   @default(PENDING)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  projectId   String       @db.ObjectId
+  project     Project      @relation(fields: [projectId], references: [id])
+
+  createdById String       @db.ObjectId
+  createdBy   User         @relation("TaskCreators", fields: [createdById], references: [id])
+
+  assignments TaskAssignment[]
+}
+
+model Member {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String      @db.ObjectId
+  user        User        @relation(fields: [userId], references: [id])
+  role        MemberRole  @default(CONTRIBUTOR)
+  joinedAt    DateTime    @default(now())
+
+  workspaceId String?     @db.ObjectId
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id])
+
+  projectId   String?     @db.ObjectId
+  project     Project?    @relation(fields: [projectId], references: [id])
+
+  assignments TaskAssignment[]
+}
+
+
+
+
 enum UserRole {
   ADMIN
   USER
   MANAGER
+}
+
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MemberRole {
+  OWNER
+  CONTRIBUTOR
+  VIEWER
 }

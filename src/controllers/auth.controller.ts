@@ -13,17 +13,7 @@ class AuthController {
       res.status(405).end();
       return;
     }
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      const errors = parsed.error.errors.map((e) => ({
-        field: e.path.join("."),
-        message: e.message,
-      }));
-
-      return sendResponse(res, 400, null, "Validation failed", errors);
-    }
-
-    const { email, password } = parsed.data;
+    const { email, password } = loginSchema.parse(req.body);
 
     if (!email || !password) {
       res.status(400).json({ error: "Email and password required" });
@@ -77,18 +67,10 @@ class AuthController {
       res.status(405).end();
       return;
     }
-
-    const parsed = signupSchema.safeParse(req.body);
-    if (!parsed.success) {
-      const errors = parsed.error.errors.map((e) => ({
-        field: e.path.join("."),
-        message: e.message,
-      }));
-
-      return sendResponse(res, 400, null, "Validation failed", errors);
-    }
-
-    const { email, password, first_name, last_name } = parsed.data;
+    console.log("signup");
+    const { email, password, first_name, last_name } = signupSchema.parse(
+      req.body
+    );
 
     const existing = await prisma.user.findFirst({
       where: {

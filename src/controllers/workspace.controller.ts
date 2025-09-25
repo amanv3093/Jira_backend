@@ -29,6 +29,14 @@ class WorkspaceController {
           },
         });
 
+        await prisma.member.create({
+          data: {
+            userId: user.id,
+            workspaceId: workspace.id,
+            role: "OWNER",
+          },
+        });
+
         res.status(201).json({
           workspace,
           message: "Workspace created successfully",
@@ -44,6 +52,80 @@ class WorkspaceController {
           return;
         }
 
+        res.status(500).json({ error: "Internal server error" });
+      }
+    }
+  );
+
+  //****************************************  Get Workspaces  *****************************************/
+  public getWorkspaces = expressAsyncHandler(
+    async (req: Request, res: Response) => {
+      try {
+        const user = req.user;
+
+        if (!user) {
+          res.status(401).json({ error: "User not authenticated" });
+          return;
+        }
+
+        const workspaces = await prisma.workspace.findMany({
+          where: {
+            OR: [
+              { ownerId: user.id },
+              { members: { some: { userId: user.id } } },
+            ],
+          },
+          include: {
+            owner: true,
+            members: { include: { user: true } },
+            projects: true,
+          },
+        });
+
+        res.status(200).json({
+          data: workspaces,
+          message: "Workspaces fetched successfully",
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+      }
+    }
+  );
+  //****************************************  Get Workspace By ID  *****************************************/
+  public getWorkspaceById = expressAsyncHandler(
+    async (req: Request, res: Response) => {
+      try {
+        const user = req.user;
+
+        if (!user) {
+          res.status(401).json({ error: "User not authenticated" });
+          return;
+        }
+
+        const workspaceId = req.params.id;
+
+        const workspaces = await prisma.workspace.findMany({
+          where: {
+           id: workspaceId,
+            OR: [
+              { ownerId: user.id },
+              { members: { some: { userId: user.id } } },
+            ],
+          },
+          include: {
+            owner: true,
+            members: { include: { user: true } },
+            projects: true,
+          },
+        });
+
+        res.status(200).json({
+          data: workspaces,
+          message: "Workspaces fetched successfully",
+        });
+      } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "Internal server error" });
       }
     }

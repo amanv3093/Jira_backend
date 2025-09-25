@@ -1,7 +1,8 @@
 import express from "express";
 import cors from "cors";
 import { PORT } from "./constant/constants";
-
+import dotenv from "dotenv";
+dotenv.config();
 const app = express();
 
 // Enable CORS

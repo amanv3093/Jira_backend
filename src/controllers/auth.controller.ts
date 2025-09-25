@@ -63,11 +63,7 @@ class AuthController {
 
   //****************************************  signup  *****************************************/
   public signup = asyncHandler(async (req: Request, res: Response) => {
-    if (req.method !== "POST") {
-      res.status(405).end();
-      return;
-    }
-    console.log("signup");
+   
     const { email, password, first_name, last_name } = signupSchema.parse(
       req.body
     );

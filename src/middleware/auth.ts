@@ -4,12 +4,17 @@ import { verifyAccessToken } from "../lib/jwt";
 
 const prisma = new PrismaClient();
 
-export interface AuthRequest extends Request {
-  user?: User; // typed as Prisma User
+// Add `user` to Express Request globally
+declare global {
+  namespace Express {
+    interface Request {
+      user?: User;
+    }
+  }
 }
 
 export const AuthMiddleware = async (
-  req: AuthRequest,
+  req: Request, 
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -21,12 +26,13 @@ export const AuthMiddleware = async (
   }
 
   const token = authHeader.split(" ")[1];
-
+  console.log("token", token);
   try {
-    const payload = verifyAccessToken(token) as { userId: string };
+    const payload = verifyAccessToken(token) as { user_id: string };
+    console.log("payload", payload);
 
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.user_id },
     });
 
     if (!user) {
@@ -34,8 +40,8 @@ export const AuthMiddleware = async (
       return;
     }
 
-    req.user = user; // attach user to request
-    next(); // pass control to next middleware or route handler
+    req.user = user; 
+    next();
   } catch (err) {
     console.error(err);
     res.status(401).json({ error: "Invalid or expired token" });

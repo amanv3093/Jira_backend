@@ -16,7 +16,10 @@ app.use(express.urlencoded({ extended: false }));
 
 // Routes
 import auth from "./routes/auth.route";
+import workspace from "./routes/workspace.route";
+
 app.use("/api/v1/auth", auth);
+app.use("/api/v1/workspace", workspace);
 
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();

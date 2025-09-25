@@ -48,6 +48,7 @@ model RefreshToken {
 model Workspace {
   id        String     @id @default(auto()) @map("_id") @db.ObjectId
   name      String
+  profilePic   String?
   createdAt DateTime   @default(now())
 
   // Relations

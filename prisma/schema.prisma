@@ -62,6 +62,7 @@ model Project {
   id          String     @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   description String?
+  profilePic  String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -91,9 +92,9 @@ model TaskAssignment {
 
 model Task {
   id          String       @id @default(auto()) @map("_id") @db.ObjectId
-  title       String
+  task_name       String
   description String?
-  status      TaskStatus   @default(PENDING)
+  status      TaskStatus   @default(BACKLOG)
   priority    TaskPriority @default(MEDIUM)
   dueDate     DateTime?
   createdAt   DateTime     @default(now())
@@ -135,10 +136,11 @@ enum UserRole {
 
 
 enum TaskStatus {
-  PENDING
+  BACKLOG
   IN_PROGRESS
-  COMPLETED
-  CANCELLED
+  IN_REVIEW
+  TODO
+  DONE
 }
 
 enum TaskPriority {

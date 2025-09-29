@@ -105,7 +105,7 @@ class WorkspaceController {
 
         const workspaceId = req.params.id;
 
-        const workspaces = await prisma.workspace.findMany({
+        const workspaces = await prisma.workspace.findUnique({
           where: {
            id: workspaceId,
             OR: [

@@ -18,11 +18,13 @@ app.use(express.urlencoded({ extended: false }));
 // Routes
 import auth from "./routes/auth.route";
 import workspace from "./routes/workspace.route";
+import project from "./routes/project.route";
+
 
 app.use("/api/v1/auth", auth);
 app.use("/api/v1/workspace", workspace);
+app.use("/api/v1/project", project);
 
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+
 
 app.listen(PORT, () => console.log(`Server is running on PORT ${PORT}`));

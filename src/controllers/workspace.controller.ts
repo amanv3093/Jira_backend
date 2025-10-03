@@ -38,7 +38,7 @@ class WorkspaceController {
         });
 
         res.status(201).json({
-          workspace,
+          data:workspace,
           message: "Workspace created successfully",
         });
       } catch (err) {

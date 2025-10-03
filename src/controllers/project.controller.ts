@@ -45,7 +45,7 @@ class ProjectController {
         });
 
         res.status(201).json({
-          project,
+          data: project,
           message: "Project created successfully",
         });
       } catch (err) {
@@ -76,7 +76,10 @@ class ProjectController {
           },
           orderBy: { createdAt: "desc" },
         });
-        res.json(projects);
+        res.status(201).json({
+          data: projects,
+          message: "Fetched Project successfully",
+        });
       } catch {
         res.status(500).json({ error: "Internal server error" });
       }
@@ -102,7 +105,10 @@ class ProjectController {
           return;
         }
 
-        res.json(project);
+        res.status(201).json({
+          data: project,
+          message: "Fetched Project successfully",
+        });
       } catch {
         res.status(500).json({ error: "Internal server error" });
       }
@@ -122,7 +128,7 @@ class ProjectController {
           data: { name, description, profilePic },
         });
 
-        res.json({ project, message: "Project updated successfully" });
+        res.json({ data:project, message: "Project updated successfully" });
       } catch (err) {
         if (err instanceof ZodError) {
           res.status(400).json({
@@ -171,13 +177,15 @@ class ProjectController {
           return;
         }
 
-        res.json(project);
+        res.status(201).json({
+          data: project,
+          message: "Fetched Project successfully",
+        });
       } catch {
         res.status(500).json({ error: "Internal server error" });
       }
     }
   );
-
 }
 
 export default ProjectController;

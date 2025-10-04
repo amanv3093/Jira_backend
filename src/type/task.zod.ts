@@ -1,12 +1,18 @@
 import { TaskPriority, TaskStatus } from "@prisma/client";
 import { z } from "zod";
 
-
 export const TaskSchema = z.object({
   task_name: z.string().min(1, "Task name is required"),
   status: z.nativeEnum(TaskStatus).optional().default(TaskStatus.BACKLOG),
   priority: z.nativeEnum(TaskPriority).optional().default(TaskPriority.MEDIUM),
-  dueDate: z.string().datetime().optional().nullable(),
+  dueDate: z
+    .preprocess((val) => {
+      if (typeof val === "string" && val.trim() !== "") {
+        return new Date(val).toISOString();
+      }
+      return val;
+    }, z.string().datetime({ offset: true }))
+    .refine((val) => !!val, { message: "Due date is required" }),
   projectId: z.string(),
   assignments: z
     .array(
@@ -15,8 +21,7 @@ export const TaskSchema = z.object({
         assignedAt: z.string().datetime().optional(),
       })
     )
-    .optional(),
+    ,
 });
-
 
 export type Task = z.infer<typeof TaskSchema>;

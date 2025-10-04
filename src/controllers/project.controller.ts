@@ -34,15 +34,15 @@ class ProjectController {
           },
         });
 
-        // Optionally: add creator as a Member with OWNER role
-        await prisma.member.create({
-          data: {
-            userId: user.id,
-            workspaceId,
-            projectId: project.id,
-            role: "OWNER",
-          },
-        });
+        
+        // await prisma.member.create({
+        //   data: {
+        //     userId: user.id,
+        //     workspaceId,
+        //     projectId: project.id,
+        //     role: "OWNER",
+        //   },
+        // });
 
         res.status(201).json({
           data: project,

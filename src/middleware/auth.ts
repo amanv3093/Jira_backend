@@ -29,7 +29,7 @@ export const AuthMiddleware = async (
   console.log("token", token);
   try {
     const payload = verifyAccessToken(token) as { user_id: string };
-    console.log("payload", payload);
+    // console.log("payload", payload);
 
     const user = await prisma.user.findUnique({
       where: { id: payload.user_id },

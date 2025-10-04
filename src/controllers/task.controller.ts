@@ -14,7 +14,7 @@ class TaskController {
   public createTask = expressAsyncHandler(
     async (req: Request, res: Response) => {
       try {
-        const { task_name, status, dueDate, projectId, assignments } =
+        const { task_name, status, dueDate, projectId, assignments, priority } =
           TaskSchema.parse(req.body);
         const user = req.user;
 
@@ -23,39 +23,40 @@ class TaskController {
           return;
         }
 
-        
-        const member = await prisma.member.create({
+        const task = await prisma.task.create({
           data: {
-            userId: user.id,
-            // workspaceId: workspace.id,
-            projectId: projectId, 
-            role: "OWNER",
+            task_name,
+            status,
+            priority,
+            dueDate: new Date(dueDate),
+            createdById: user.id,
+            projectId,
           },
         });
+        console.log("assignments", assignments);
+        const memberRecords = await prisma.member.findMany({
+          where: {
+            userId: { in: assignments.map((a) => a.userId) },
+            projectId,
+          },
+        });
+        console.log("memberRecords", memberRecords);
 
-       
-        // const task = await prisma.task.create({
-        //   data: {
-        //     task_name,
-        //     status,
-        //     dueDate,
-        //     createdById: user.id,
-        //     projectId: projectId,
-        //   },
-        // });
+        if (memberRecords.length > 0) {
+          for (const m of memberRecords) {
+            await prisma.taskAssignment.create({
+              data: {
+                taskId: task.id,
+                memberId: m.id,
+              },
+            });
+          }
+        }
 
-       
-        // await prisma.taskAssignment.create({
-        //   data: {
-        //     taskId: task.id,
-        //     memberId: member.id,
-        //   },
-        // });
-
-        // res.status(201).json({
-        //   task,
-        //   message: "Task created successfully",
-        // });
+        res.status(201).json({
+          task,
+          message: "Task created successfully",
+        });
       } catch (err) {
         if (err instanceof ZodError) {
           res.status(400).json({
@@ -67,6 +68,64 @@ class TaskController {
           return;
         }
 
+        res.status(500).json({ error: "Internal server error" });
+      }
+    }
+  );
+  //****************************************  Get By Workspace Id  *****************************************/
+  public getTaskByWorkspaceId = expressAsyncHandler(
+    async (req: Request, res: Response) => {
+      const user = req.user;
+
+      if (!user) {
+        res.status(401).json({ error: "User not authenticated" });
+        return;
+      }
+      try {
+        const id = req.params.id;
+        console.log("Enter", id);
+        if (!id) {
+          res.status(401).json({ error: "workspaceId  are required" });
+          return;
+        }
+        const tasks = await prisma.task.findMany({
+          where: {
+            project: {
+              workspaceId: id as string,
+            },
+            assignments: {
+              some: {
+                member: {
+                  userId: user?.id as string,
+                },
+              },
+            },
+          },
+          include: {
+            project: true,
+            createdBy: true,
+            assignments: {
+              include: {
+                member: {
+                  include: {
+                    user: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (!tasks) {
+          res.status(404).json({ error: "Task not found" });
+          return;
+        }
+
+        res.status(201).json({
+          data: tasks,
+          message: "Fetched Task successfully",
+        });
+      } catch {
         res.status(500).json({ error: "Internal server error" });
       }
     }

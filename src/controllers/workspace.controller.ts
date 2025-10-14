@@ -38,7 +38,7 @@ class WorkspaceController {
         });
 
         res.status(201).json({
-          data:workspace,
+          data: workspace,
           message: "Workspace created successfully",
         });
       } catch (err) {
@@ -107,7 +107,7 @@ class WorkspaceController {
 
         const workspaces = await prisma.workspace.findUnique({
           where: {
-           id: workspaceId,
+            id: workspaceId,
             OR: [
               { ownerId: user.id },
               { members: { some: { userId: user.id } } },
@@ -130,5 +130,7 @@ class WorkspaceController {
       }
     }
   );
+ 
+  
 }
 export default WorkspaceController;

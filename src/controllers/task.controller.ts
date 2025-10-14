@@ -19,7 +19,7 @@ class TaskController {
         const user = req.user;
 
         if (!user) {
-          res.status(401).json({ error: "User not authenticated" });
+          res.status(401).json({ error: "User not authenticated",status:401 });
           return;
         }
         console.log("assignments", assignments);
@@ -31,7 +31,7 @@ class TaskController {
         });
 
         if (memberRecords.length === 0) {
-          res.status(401).json({ error: "Member not found" });
+          res.status(401).json({ error: "Member not found",status:401 });
           return;
         }
 
@@ -83,14 +83,16 @@ class TaskController {
       const user = req.user;
 
       if (!user) {
-        res.status(401).json({ error: "User not authenticated" });
+        res.status(401).json({ error: "User not authenticated",status:401 });
         return;
       }
       try {
         const id = req.params.id;
-        // console.log("Enter", id);
+       
         if (!id) {
-          res.status(401).json({ error: "workspaceId  are required" });
+          res
+            .status(401)
+            .json({ error: "workspaceId  are required", status: 401 });
           return;
         }
 
@@ -157,16 +159,17 @@ class TaskController {
         //   },
         // },
         if (!tasks) {
-          res.status(404).json({ error: "Task not found" });
+          res.status(404).json({ error: "Task not found", status: 404 });
           return;
         }
 
         res.status(201).json({
           data: tasks,
           message: "Fetched Task successfully",
+          status: 201,
         });
       } catch {
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json({ error: "Internal server error", status: 500 });
       }
     }
   );

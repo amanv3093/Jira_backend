@@ -5,11 +5,12 @@ import TaskController from "../controllers/task.controller";
 
 const router = Router();
 
-const { createTask ,getTaskByWorkspaceId} =
+const { createTask ,getTaskByWorkspaceId,getTaskByProjectId} =
   new TaskController();
 
 router.route("/").post(AuthMiddleware, createTask);
 router.route("/workspace/:id").get(AuthMiddleware, getTaskByWorkspaceId);
+router.route("/project/:id").get(AuthMiddleware, getTaskByProjectId);
 
 
 export default router;

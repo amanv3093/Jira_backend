@@ -19,7 +19,9 @@ class TaskController {
         const user = req.user;
 
         if (!user) {
-          res.status(401).json({ error: "User not authenticated",status:401 });
+          res
+            .status(401)
+            .json({ error: "User not authenticated", status: 401 });
           return;
         }
         console.log("assignments", assignments);
@@ -31,7 +33,7 @@ class TaskController {
         });
 
         if (memberRecords.length === 0) {
-          res.status(401).json({ error: "Member not found",status:401 });
+          res.status(401).json({ error: "Member not found", status: 401 });
           return;
         }
 
@@ -83,12 +85,12 @@ class TaskController {
       const user = req.user;
 
       if (!user) {
-        res.status(401).json({ error: "User not authenticated",status:401 });
+        res.status(401).json({ error: "User not authenticated", status: 401 });
         return;
       }
       try {
         const id = req.params.id;
-       
+
         if (!id) {
           res
             .status(401)
@@ -151,6 +153,104 @@ class TaskController {
             },
           },
         });
+        // assignments: {
+        //   some: {
+        //     member: {
+        //       userId: user?.id as string,
+        //     },
+        //   },
+        // },
+        if (!tasks) {
+          res.status(404).json({ error: "Task not found", status: 404 });
+          return;
+        }
+
+        res.status(201).json({
+          data: tasks,
+          message: "Fetched Task successfully",
+          status: 201,
+        });
+      } catch {
+        res.status(500).json({ error: "Internal server error", status: 500 });
+      }
+    }
+  );
+
+  //****************************************  Get By Workspace Id  *****************************************/
+  public getTaskByProjectId = expressAsyncHandler(
+    async (req: Request, res: Response) => {
+      const user = req.user;
+
+      if (!user) {
+        res.status(401).json({ error: "User not authenticated", status: 401 });
+        return;
+      }
+      try {
+        const id = req.params.id;
+
+        if (!id) {
+          res
+            .status(401)
+            .json({ error: "workspaceId  are required", status: 401 });
+          return;
+        }
+        console.log(id);
+
+        const { status, priority, project, assignee, search } = req.query;
+        const statusArray = typeof status === "string" ? status.split(",") : [];
+        const priorityArray =
+          typeof priority === "string" ? priority.split(",") : [];
+        const projectArray =
+          typeof project === "string" ? project.split(",") : [];
+        const assigneeArray =
+          typeof assignee === "string" ? assignee.split(",") : [];
+
+        const whereClause: any = {
+          projectId: id as string,
+        };
+        if (statusArray.length > 0) {
+          whereClause.status = { in: statusArray };
+        }
+
+        if (priorityArray.length > 0) {
+          whereClause.priority = { in: priorityArray };
+        }
+
+        if (projectArray.length > 0) {
+          whereClause.projectId = { in: projectArray };
+        }
+
+        if (assigneeArray.length > 0) {
+          whereClause.assignments = {
+            some: {
+              memberId: { in: assigneeArray },
+            },
+          };
+        }
+
+        if (search && typeof search === "string" && search.trim() !== "") {
+          whereClause.OR = [
+            { task_name: { contains: search, mode: "insensitive" } },
+          ];
+        }
+        console.log(whereClause);
+        const tasks = await prisma.task.findMany({
+          where: whereClause,
+          include: {
+            project: true,
+            createdBy: true,
+            assignments: {
+              include: {
+                member: {
+                  include: {
+                    user: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+        console.log(tasks);
         // assignments: {
         //   some: {
         //     member: {

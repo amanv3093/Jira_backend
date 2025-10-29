@@ -162,6 +162,10 @@ class ProjectController {
   public getProjectByWorkspaceId = expressAsyncHandler(
     async (req: Request, res: Response) => {
       try {
+         if (!req.params.id) {
+          res.status(404).json({ error: "Workspace Id not found" });
+          return;
+        }
         const project = await prisma.project.findMany({
           where: { workspaceId: req.params.id },
           include: {

@@ -20,11 +20,13 @@ import auth from "./routes/auth.route";
 import workspace from "./routes/workspace.route";
 import project from "./routes/project.route";
 import task from "./routes/task.route";
+import member from "./routes/member.route";
 
 app.use("/api/v1/auth", auth);
 app.use("/api/v1/workspace", workspace);
 app.use("/api/v1/project", project);
 app.use("/api/v1/task", task);
+app.use("/api/v1/member", member);
 
 
 

@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { PORT } from "./constant/constants";
+import { PORT } from "./src/constant/constants";
 import dotenv from "dotenv";
 dotenv.config();
 const app = express();
@@ -16,11 +16,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Routes
-import auth from "./routes/auth.route";
-import workspace from "./routes/workspace.route";
-import project from "./routes/project.route";
-import task from "./routes/task.route";
-import member from "./routes/member.route";
+import auth from "./src/routes/auth.route";
+import workspace from "./src/routes/workspace.route";
+import project from "./src/routes/project.route";
+import task from "./src/routes/task.route";
+import member from "./src/routes/member.route";
 
 app.use("/api/v1/auth", auth);
 app.use("/api/v1/workspace", workspace);

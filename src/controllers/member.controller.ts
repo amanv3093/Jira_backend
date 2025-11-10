@@ -72,7 +72,7 @@ class MemberController {
         },
       });
 
-      const inviteUrl = `${process.env.FRONTEND_URL}/join/${token}`;
+      const inviteUrl = `http://localhost:3000/join/${token}`;
 
       res.status(201).json({
         data: { inviteUrl, token },

@@ -166,8 +166,14 @@ class ProjectController {
           res.status(404).json({ error: "Workspace Id not found" });
           return;
         }
+        console.log(req.user)
+       
         const project = await prisma.project.findMany({
-          where: { workspaceId: req.params.id },
+          where: { workspaceId: req.params.id , members:{
+            some:{
+              userId:req.user?.id
+            }
+          }},
           include: {
             owner: true,
             workspace: true,

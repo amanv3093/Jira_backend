@@ -4,7 +4,7 @@ import { Request, Response } from "express";
 import { createWorkspaceSchema } from "../type/workspace.type";
 import { PrismaClient, User } from "@prisma/client";
 import { ZodError } from "zod";
-import { TaskSchema } from "../type/task.zod";
+import { TaskEditSchema, TaskSchema } from "../type/task.zod";
 
 // Extend Express Request interface to include user property
 
@@ -273,5 +273,85 @@ class TaskController {
       }
     }
   );
+
+  //****************************************  Update Task  *****************************************/
+  public updateTask = expressAsyncHandler(async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: "User not authenticated", status: 401 });
+      return;
+    }
+    console.log("Runnnnnnnnnnn")
+    try {
+      const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: "Task ID is required", status: 400 });
+        return;
+      }
+
+      // Allow partial updates
+      const updateData = TaskEditSchema.partial().parse(req.body);
+
+      const existingTask = await prisma.task.findUnique({
+        where: { id },
+        include: { assignments: true },
+      });
+
+      if (!existingTask) {
+        res.status(404).json({ error: "Task not found", status: 404 });
+        return;
+      }
+
+      // Update task info
+      const updatedTask = await prisma.task.update({
+        where: { id },
+        data: {
+          task_name: updateData.task_name ?? existingTask.task_name,
+          status: updateData.status ?? existingTask.status,
+          priority: updateData.priority ?? existingTask.priority,
+          dueDate: updateData.dueDate
+            ? new Date(updateData.dueDate)
+            : existingTask.dueDate,
+        },
+      });
+
+      // Update task assignments if provided
+      if (updateData.assignments && Array.isArray(updateData.assignments)) {
+        // Delete old assignments
+        await prisma.taskAssignment.deleteMany({ where: { taskId: id } });
+
+        // Add new ones
+        const memberRecords = await prisma.member.findMany({
+          where: {
+            userId: { in: updateData.assignments.map((a) => a.userId) },
+          },
+        });
+
+        for (const m of memberRecords) {
+          await prisma.taskAssignment.create({
+            data: { taskId: id, memberId: m.id },
+          });
+        }
+      }
+
+      res.status(200).json({
+        message: "Task updated successfully",
+        task: updatedTask,
+      });
+    } catch (err) {
+      if (err instanceof ZodError) {
+        res.status(400).json({
+          errors: err.issues.map((issue) => ({
+            path: issue.path.join("."),
+            message: issue.message,
+          })),
+        });
+        return;
+      }
+
+      console.error("Update error:", err);
+      res.status(500).json({ error: "Internal server error", status: 500 });
+    }
+  });
 }
 export default TaskController;

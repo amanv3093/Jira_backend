@@ -14,6 +14,28 @@ export const TaskSchema = z.object({
     }, z.string().datetime({ offset: true }))
     .refine((val) => !!val, { message: "Due date is required" }),
   projectId: z.string(),
+  assignments: z.array(
+    z.object({
+      userId: z.string(),
+      assignedAt: z.string().datetime().optional(),
+    })
+  ),
+});
+
+export const TaskEditSchema = z.object({
+  task_name: z.string().optional(),
+  status: z.nativeEnum(TaskStatus).optional(),
+  priority: z.nativeEnum(TaskPriority).optional(),
+  dueDate: z
+    .preprocess((val) => {
+      if (typeof val === "string" && val.trim() !== "") {
+        return new Date(val).toISOString();
+      }
+
+      return undefined;
+    }, z.string().datetime({ offset: true }).optional())
+    .optional(),
+
   assignments: z
     .array(
       z.object({
@@ -21,7 +43,7 @@ export const TaskSchema = z.object({
         assignedAt: z.string().datetime().optional(),
       })
     )
-    ,
+    .optional(),
 });
 
 export type Task = z.infer<typeof TaskSchema>;

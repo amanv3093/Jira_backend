@@ -26,7 +26,7 @@ export const AuthMiddleware = async (
   }
 
   const token = authHeader.split(" ")[1];
-  console.log("token", token);
+  // console.log("token", token);
   try {
     const payload = verifyAccessToken(token) as { user_id: string };
     // console.log("payload", payload);

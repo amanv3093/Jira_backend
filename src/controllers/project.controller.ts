@@ -3,26 +3,48 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { ZodError } from "zod";
 import { createProjectSchema, updateProjectSchema } from "../type/project.zod";
-import { uploadFile } from "../utils/helper";
+import { uploadFile } from "../lib/cloudinary";
+import { Multer } from "multer";
 // import { MulterRequest } from "@/types/multer";
-
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+}
 const prisma = new PrismaClient();
 
 class ProjectController {
   //****************************************  Create  *****************************************/
   public createProject = expressAsyncHandler(
-    async (req: Request, res: Response) => {
+    async (req: MulterRequest, res: Response): Promise<void> => {
       try {
-        const { name, description, workspaceId } = createProjectSchema.parse(
-          req.body
-        );
+        const result = createProjectSchema.safeParse(req.body);
+
+        if (!result.success) {
+          res.status(400).json({
+            errors: result.error.issues.map((issue) => ({
+              path: issue.path.join("."),
+              message: issue.message,
+            })),
+          });
+          return;
+        }
+
+        const { name, description, workspaceId } = result.data;
         const user = req.user;
 
         if (!user) {
           res.status(401).json({ error: "User not authenticated" });
           return;
         }
-        //  const profilePicUrl = await uploadFile(req.file);
+
+        // console.log("req:", req);
+        console.log("req.file:", req.file);
+
+        let profilePicUrl: string | null = null;
+        if (req.file) {
+          profilePicUrl = await uploadFile(req.file);
+        }
+
+        
 
         const project = await prisma.project.create({
           data: {
@@ -30,11 +52,10 @@ class ProjectController {
             description,
             workspaceId,
             ownerId: user.id,
-            // profilePic,
+            profilePic: profilePicUrl,
           },
         });
 
-        
         await prisma.member.create({
           data: {
             userId: user.id,
@@ -58,6 +79,8 @@ class ProjectController {
           });
           return;
         }
+
+        console.error("Internal error:", err);
         res.status(500).json({ error: "Internal server error" });
       }
     }
@@ -119,16 +142,14 @@ class ProjectController {
   public updateProject = expressAsyncHandler(
     async (req: Request, res: Response) => {
       try {
-        const { name, description, profilePic } = updateProjectSchema.parse(
-          req.body
-        );
+        const { name, description } = updateProjectSchema.parse(req.body);
 
         const project = await prisma.project.update({
           where: { id: req.params.id },
-          data: { name, description, profilePic },
+          data: { name, description },
         });
 
-        res.json({ data:project, message: "Project updated successfully" });
+        res.json({ data: project, message: "Project updated successfully" });
       } catch (err) {
         if (err instanceof ZodError) {
           res.status(400).json({
@@ -162,18 +183,20 @@ class ProjectController {
   public getProjectByWorkspaceId = expressAsyncHandler(
     async (req: Request, res: Response) => {
       try {
-         if (!req.params.id) {
+        if (!req.params.id) {
           res.status(404).json({ error: "Workspace Id not found" });
           return;
         }
-        console.log(req.user)
-       
+
         const project = await prisma.project.findMany({
-          where: { workspaceId: req.params.id , members:{
-            some:{
-              userId:req.user?.id
-            }
-          }},
+          where: {
+            workspaceId: req.params.id,
+            members: {
+              some: {
+                userId: req.user?.id,
+              },
+            },
+          },
           include: {
             owner: true,
             workspace: true,

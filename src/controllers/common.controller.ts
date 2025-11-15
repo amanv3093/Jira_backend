@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { ZodError } from "zod";
 import { createProjectSchema, updateProjectSchema } from "../type/project.zod";
-import { uploadFile } from "../utils/helper";
+
 // import { MulterRequest } from "@/types/multer";
 
 const prisma = new PrismaClient();

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import ProjectController from "../controllers/project.controller";
 import { AuthMiddleware } from "../middleware/auth";
+import { upload } from "../lib/upload";
 
 const router = Router();
 
@@ -15,7 +16,7 @@ const {
 
 router
   .route("/")
-  .post(AuthMiddleware, createProject)
+  .post(AuthMiddleware, upload.single("profilePic"),createProject)
   .get(AuthMiddleware, getAllProjects);
 
 router

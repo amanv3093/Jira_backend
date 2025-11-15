@@ -7,7 +7,7 @@ const router = Router();
 
 const { createTask ,getTaskByWorkspaceId,getTaskByProjectId,updateTask} =
   new TaskController();
-console.log("Run1")
+
 router.route("/").post(AuthMiddleware, createTask);
 router.route("/workspace/:id").get(AuthMiddleware, getTaskByWorkspaceId);
 router.route("/project/:id").get(AuthMiddleware, getTaskByProjectId);

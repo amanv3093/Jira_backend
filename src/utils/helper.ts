@@ -1,8 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-
-export async function uploadFile(file: File | null): Promise<string | undefined> {
+ async function uploadFile(file: File | null): Promise<string | undefined> {
   if (!file) return undefined;
 
   const bytes = await file.arrayBuffer();

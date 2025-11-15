@@ -4,28 +4,35 @@ import { Request, Response } from "express";
 import { createWorkspaceSchema } from "../type/workspace.type";
 import { PrismaClient, User } from "@prisma/client";
 import { ZodError } from "zod";
+import { uploadFile } from "../lib/cloudinary";
 
 // Extend Express Request interface to include user property
-
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+}
 const prisma = new PrismaClient();
 class WorkspaceController {
   //****************************************  Create  *****************************************/
   public createWorkspace = expressAsyncHandler(
-    async (req: Request, res: Response) => {
+    async (req: MulterRequest, res: Response) => {
       try {
-        const { name, profilePic } = createWorkspaceSchema.parse(req.body);
+        const { name } = createWorkspaceSchema.parse(req.body);
         const user = req.user;
 
         if (!user) {
           res.status(401).json({ error: "User not authenticated" });
           return;
         }
+        let profilePicUrl: string | null = null;
+        if (req.file) {
+          profilePicUrl = await uploadFile(req.file);
+        }
 
         const workspace = await prisma.workspace.create({
           data: {
             name,
             ownerId: user.id,
-            ...(profilePic && { profilePic }),
+            ...(profilePicUrl && { profilePic: profilePicUrl }),
           },
         });
 
@@ -130,7 +137,5 @@ class WorkspaceController {
       }
     }
   );
- 
-  
 }
 export default WorkspaceController;

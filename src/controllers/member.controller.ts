@@ -11,7 +11,7 @@ class MemberController {
   public Invite = expressAsyncHandler(async (req: Request, res: Response) => {
     try {
       const user = req.user;
-      const { workspaceId, projectId } = req.body;
+      const { workspaceId, projectId, invites } = req.body;
 
       if (!user) {
         res.status(401).json({ error: "User not authenticated" });
@@ -23,63 +23,54 @@ class MemberController {
         return;
       }
 
-      const isAuthorizedMember = async () => {
-        if (workspaceId) {
-          const workspace = await prisma.workspace.findUnique({
-            where: { id: workspaceId },
-            include: { members: true },
-          });
-
-          if (!workspace) return false;
-
-          const member = workspace.members.find((m) => m.userId === user.id);
-          return (
-            workspace.ownerId === user.id ||
-            (member && ["ADMIN", "MANAGER"].includes(member.role))
-          );
-        }
-
-        if (projectId) {
-          const project = await prisma.project.findUnique({
-            where: { id: projectId },
-            include: { members: true },
-          });
-
-          if (!project) return false;
-
-          const member = project.members.find((m) => m.userId === user.id);
-          return member && ["ADMIN", "MANAGER"].includes(member.role);
-        }
-
-        return false;
-      };
-
-      const authorized = await isAuthorizedMember();
-      if (!authorized) {
-        res.status(403).json({ error: "Not authorized to create invites" });
+      if (!Array.isArray(invites) || invites.length === 0) {
+        res.status(400).json({ error: "Invites list is required" });
         return;
       }
 
-      const token = require("crypto").randomBytes(32).toString("hex");
-
-      const invite = await prisma.invite.create({
-        data: {
-          workspaceId: workspaceId || null,
-          projectId: projectId || null,
-          createdById: user.id,
-          token,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      const workspaceAuth = await prisma.workspace.findFirst({
+        where: {
+          id: workspaceId!,
+          members: {
+            some: { userId: user.id, role: { in: ["OWNER"] } },
+          },
         },
       });
 
-      const inviteUrl = `http://localhost:3000/join/${token}`;
+      if (!workspaceAuth) {
+        res.status(403).json({ error: "Not authorized to invite users" });
+        return;
+      }
+
+      const createdInvites = [];
+
+      for (const invite of invites) {
+        const token = require("crypto").randomBytes(32).toString("hex");
+
+        const newInvite = await prisma.invite.create({
+          data: {
+            workspaceId: workspaceId || null,
+            projectId: projectId || null,
+            createdById: user.id,
+            email: invite.email,
+            role: invite.role.toUpperCase(),
+            token,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
+        });
+
+        createdInvites.push({
+          email: invite.email,
+          inviteUrl: `${process.env.FRONTEND_URL}/join/${token}`,
+        });
+      }
 
       res.status(201).json({
-        data: { inviteUrl, token },
-        message: "Invite created successfully",
+        message: "Invites created successfully",
+        data: createdInvites,
       });
     } catch (err) {
-      console.error(err);
+      console.error("Invite Error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -146,55 +137,54 @@ class MemberController {
     }
   });
 
-  public verifyInvite = expressAsyncHandler(async (req: Request, res: Response) => {
-  try {
-    const { token } = req.params;
+  public verifyInvite = expressAsyncHandler(
+    async (req: Request, res: Response) => {
+      try {
+        const { token } = req.params;
 
-    if (!token) {
-      res.status(400).json({ error: "Token is required" });
-      return;
+        if (!token) {
+          res.status(400).json({ error: "Token is required" });
+          return;
+        }
+
+        const invite = await prisma.invite.findUnique({
+          where: { token },
+          include: {
+            workspace: { select: { id: true, name: true } },
+            project: { select: { id: true, name: true } },
+          },
+        });
+
+        if (!invite) {
+          res.status(404).json({ error: "Invalid invite token" });
+          return;
+        }
+
+        if (invite.expiresAt && invite.expiresAt < new Date()) {
+          // Option 1: Delete expired invite
+          await prisma.invite.delete({ where: { token } });
+
+          // Option 2 (optional): mark it expired instead
+          // await prisma.invite.update({ where: { token }, data: { status: "EXPIRED" } });
+
+          res.status(400).json({ error: "Invite link has expired" });
+          return;
+        }
+
+        res.status(200).json({
+          message: "Invite verified successfully",
+          data: {
+            workspace: invite.workspace,
+            project: invite.project,
+            // invitedBy: invite.invitedBy,
+          },
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+      }
     }
-
-    const invite = await prisma.invite.findUnique({
-      where: { token },
-      include: {
-        workspace: { select: { id: true, name: true } },
-        project: { select: { id: true, name: true } },
-        
-      },
-    });
-
-    if (!invite) {
-      res.status(404).json({ error: "Invalid invite token" });
-      return;
-    }
-
-    if (invite.expiresAt && invite.expiresAt < new Date()) {
-      // Option 1: Delete expired invite
-      await prisma.invite.delete({ where: { token } });
-
-      // Option 2 (optional): mark it expired instead
-      // await prisma.invite.update({ where: { token }, data: { status: "EXPIRED" } });
-
-      res.status(400).json({ error: "Invite link has expired" });
-      return;
-    }
-
-   
-    res.status(200).json({
-      message: "Invite verified successfully",
-      data: {
-        workspace: invite.workspace,
-        project: invite.project,
-        // invitedBy: invite.invitedBy,
-      },
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
+  );
 
   //****************************************  Get Member By WorkspaceId  *****************************************/
   public getMemberByWorkspaceId = expressAsyncHandler(

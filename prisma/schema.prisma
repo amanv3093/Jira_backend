@@ -130,13 +130,16 @@ model Member {
 
 model Invite {
   id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  email       String
+  role        String
   workspaceId String?    @db.ObjectId
   projectId   String?    @db.ObjectId
   token       String     @unique
   expiresAt   DateTime
   createdAt   DateTime   @default(now())
   createdById String     @db.ObjectId
-
+  
+  
   workspace   Workspace? @relation("WorkspaceInvites", fields: [workspaceId], references: [id])
   project     Project?   @relation("ProjectInvites", fields: [projectId], references: [id])
 }

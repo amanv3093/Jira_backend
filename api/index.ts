@@ -1,3 +1,2 @@
-import app from '../src/index';
-
-export default (req, res) => app(req, res);
+import app from "../src/app";
+export default app;

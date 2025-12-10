@@ -2,6 +2,7 @@ import expressAsyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { ZodError } from "zod";
+import { sendEmail } from "../utils/sendEmail";
 
 // Extend Express Request interface to include user property
 
@@ -53,10 +54,37 @@ class MemberController {
             projectId: projectId || null,
             createdById: user.id,
             email: invite.email,
-            role: invite.role.toUpperCase(),
+            role: "CONTRIBUTOR",
             token,
             expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           },
+        });
+
+        await sendEmail({
+          to: invite.email,
+          subject: `You’ve been invited to join a project`,
+          html: `
+    <div style="font-family: sans-serif;">
+      <h2>You're invited 🚀</h2>
+      <p>
+        You have been invited to join 
+        <strong>${projectId ? "this project" : "this workspace"}</strong>
+        as a <strong>${invite.role}</strong>.
+      </p>
+
+      <a 
+        href="${process.env.FRONTEND_URL}/join/${token}"
+        style="display:inline-block;padding:10px 20px;
+        background-color:#3b82f6;color:white;text-decoration:none;
+        border-radius:6px;font-weight:bold;margin-top:10px;">
+        Accept Invite
+      </a>
+
+      <p style="margin-top: 20px;color:#666;">
+        This link will expire in 7 days.
+      </p>
+    </div>
+  `,
         });
 
         createdInvites.push({
@@ -191,8 +219,10 @@ class MemberController {
     async (req: Request, res: Response) => {
       try {
         const user = req.user;
+        const workspaceId = req.params.id;
+        console.log("workspaceId",workspaceId)
 
-        if (!req.params.id) {
+        if (!workspaceId) {
           res.status(404).json({ error: "Workspace ID not found" });
           return;
         }
@@ -201,8 +231,6 @@ class MemberController {
           res.status(401).json({ error: "User not authenticated" });
           return;
         }
-
-        const workspaceId = req.params.id;
 
         const members = await prisma.member.findMany({
           where: {
@@ -221,6 +249,7 @@ class MemberController {
               include: {
                 task: {
                   include: {
+                    // ⭐ IMPORTANT: make project NULL-safe
                     project: {
                       select: {
                         id: true,
@@ -237,38 +266,51 @@ class MemberController {
                 },
               },
             },
+            // ⭐ OPTIONAL: allow NULL safely if you decide to show workspace role
+            workspace: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         });
 
+        console.log("members", members);
+
+        //       const tasks = member.assignments
+        // .map(a => a.task)
+        // .filter(t => t !== null);
+
         // Add task counts for each member
-        const enrichedMembers = members.map((member) => {
-          const tasks = member.assignments.map((a) => a.task);
+        // const enrichedMembers = members.map((member) => {
+        //   const tasks = member.assignments.map((a) => a.task);
 
-          const totalTasks = tasks.length;
+        //   const totalTasks = tasks.length;
 
-          const completedTasks = tasks.filter(
-            (t) => t.status === "DONE"
-          ).length;
+        //   const completedTasks = tasks.filter(
+        //     (t) => t.status === "DONE"
+        //   ).length;
 
-          const overdueTasks = tasks.filter(
-            (t) =>
-              t.dueDate &&
-              new Date(t.dueDate) < new Date() &&
-              t.status !== "DONE"
-          ).length;
+        //   const overdueTasks = tasks.filter(
+        //     (t) =>
+        //       t.dueDate &&
+        //       new Date(t.dueDate) < new Date() &&
+        //       t.status !== "DONE"
+        //   ).length;
 
-          return {
-            ...member,
-            stats: {
-              totalTasks,
-              completedTasks,
-              overdueTasks,
-            },
-          };
-        });
+        //   return {
+        //     ...member,
+        //     stats: {
+        //       totalTasks,
+        //       completedTasks,
+        //       overdueTasks,
+        //     },
+        //   };
+        // });
 
         res.status(200).json({
-          data: enrichedMembers,
+          data: members,
           message: "Members with assigned tasks and stats fetched successfully",
         });
       } catch (err) {

@@ -7,10 +7,12 @@ const app = express();
 
 // Enable CORS
 
-app.options("*", cors({
-  origin: "http://localhost:3000",
+app.use(cors({
+  origin: process.env.CLIENT_URL,
   credentials: true,
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
 }));
+
 
 
 app.use(express.json());
@@ -43,5 +45,4 @@ app.get("/send",async () => {
 });
 
 
-app.listen(PORT, () => console.log(`Server is running on PORT ${PORT}`));
 export default app;

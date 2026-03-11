@@ -353,5 +353,35 @@ class TaskController {
       res.status(500).json({ error: "Internal server error", status: 500 });
     }
   });
+  //****************************************  Delete Task  *****************************************/
+  public deleteTask = expressAsyncHandler(async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: "User not authenticated", status: 401 });
+      return;
+    }
+
+    try {
+      const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: "Task ID is required", status: 400 });
+        return;
+      }
+
+      const existingTask = await prisma.task.findUnique({ where: { id } });
+      if (!existingTask) {
+        res.status(404).json({ error: "Task not found", status: 404 });
+        return;
+      }
+
+      await prisma.taskAssignment.deleteMany({ where: { taskId: id } });
+      await prisma.task.delete({ where: { id } });
+
+      res.status(200).json({ message: "Task deleted successfully" });
+    } catch (err) {
+      console.error("Delete error:", err);
+      res.status(500).json({ error: "Internal server error", status: 500 });
+    }
+  });
 }
 export default TaskController;

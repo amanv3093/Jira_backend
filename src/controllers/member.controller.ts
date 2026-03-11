@@ -44,8 +44,50 @@ class MemberController {
       }
 
       const createdInvites = [];
+      const skippedInvites = [];
 
       for (const invite of invites) {
+        // Check if user is already a member
+        const existingUser = await prisma.user.findUnique({
+          where: { email: invite.email },
+        });
+
+        if (existingUser) {
+          const memberWhere: any = { userId: existingUser.id };
+          if (workspaceId) memberWhere.workspaceId = workspaceId;
+          if (projectId) memberWhere.projectId = projectId;
+
+          const existingMember = await prisma.member.findFirst({
+            where: memberWhere,
+          });
+
+          if (existingMember) {
+            skippedInvites.push({
+              email: invite.email,
+              reason: "Already a member",
+            });
+            continue;
+          }
+        }
+
+        // Check if there's already a pending invite
+        const existingInvite = await prisma.invite.findFirst({
+          where: {
+            email: invite.email,
+            ...(workspaceId && { workspaceId }),
+            ...(projectId && { projectId }),
+            expiresAt: { gt: new Date() },
+          },
+        });
+
+        if (existingInvite) {
+          skippedInvites.push({
+            email: invite.email,
+            reason: "Invite already pending",
+          });
+          continue;
+        }
+
         const token = require("crypto").randomBytes(32).toString("hex");
 
         const newInvite = await prisma.invite.create({
@@ -96,6 +138,7 @@ class MemberController {
       res.status(201).json({
         message: "Invites created successfully",
         data: createdInvites,
+        skipped: skippedInvites,
       });
     } catch (err) {
       console.error("Invite Error:", err);
@@ -129,17 +172,18 @@ class MemberController {
         return;
       }
 
+      const memberWhere: any = { userId: user.id };
+      if (invite.workspaceId) memberWhere.workspaceId = invite.workspaceId;
+      if (invite.projectId) memberWhere.projectId = invite.projectId;
+
       const existingMember = await prisma.member.findFirst({
-        where: {
-          workspaceId: invite.workspaceId,
-          projectId: invite.projectId,
-          userId: user.id,
-        },
+        where: memberWhere,
       });
 
       if (existingMember) {
+        await prisma.invite.delete({ where: { token } });
         res.status(200).json({
-          message: "Already a member of this workspace",
+          message: "Already a member of this workspace/project",
         });
         return;
       }
@@ -214,6 +258,116 @@ class MemberController {
     }
   );
 
+  //****************************************  Remove Member  *****************************************/
+  public removeMember = expressAsyncHandler(
+    async (req: Request, res: Response) => {
+      try {
+        const user = req.user;
+        const memberId = req.params.memberId;
+        const workspaceId = req.params.workspaceId;
+
+        if (!user) {
+          res.status(401).json({ error: "User not authenticated" });
+          return;
+        }
+
+        // Verify requester is OWNER of the workspace
+        const isOwner = await prisma.member.findFirst({
+          where: { userId: user.id, workspaceId, role: "OWNER" },
+        });
+
+        if (!isOwner) {
+          res.status(403).json({ error: "Only workspace owner can remove members" });
+          return;
+        }
+
+        const member = await prisma.member.findUnique({ where: { id: memberId } });
+
+        if (!member) {
+          res.status(404).json({ error: "Member not found" });
+          return;
+        }
+
+        // Cannot remove yourself as owner
+        if (member.userId === user.id) {
+          res.status(400).json({ error: "Cannot remove yourself as workspace owner" });
+          return;
+        }
+
+        // Delete task assignments for this member
+        await prisma.taskAssignment.deleteMany({
+          where: { memberId },
+        });
+
+        // Delete the member
+        await prisma.member.delete({ where: { id: memberId } });
+
+        res.status(200).json({ message: "Member removed successfully" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+      }
+    }
+  );
+
+  //****************************************  Update Member Role  *****************************************/
+  public updateMemberRole = expressAsyncHandler(
+    async (req: Request, res: Response) => {
+      try {
+        const user = req.user;
+        const memberId = req.params.memberId;
+        const workspaceId = req.params.workspaceId;
+        const { role } = req.body;
+
+        if (!user) {
+          res.status(401).json({ error: "User not authenticated" });
+          return;
+        }
+
+        if (!["OWNER", "CONTRIBUTOR", "VIEWER"].includes(role)) {
+          res.status(400).json({ error: "Invalid role" });
+          return;
+        }
+
+        // Verify requester is OWNER
+        const isOwner = await prisma.member.findFirst({
+          where: { userId: user.id, workspaceId, role: "OWNER" },
+        });
+
+        if (!isOwner) {
+          res.status(403).json({ error: "Only workspace owner can update roles" });
+          return;
+        }
+
+        const member = await prisma.member.findUnique({ where: { id: memberId } });
+
+        if (!member) {
+          res.status(404).json({ error: "Member not found" });
+          return;
+        }
+
+        if (member.userId === user.id) {
+          res.status(400).json({ error: "Cannot change your own role" });
+          return;
+        }
+
+        const updated = await prisma.member.update({
+          where: { id: memberId },
+          data: { role },
+          include: { user: { select: { id: true, full_name: true, email: true } } },
+        });
+
+        res.status(200).json({
+          data: updated,
+          message: "Member role updated successfully",
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+      }
+    }
+  );
+
   //****************************************  Get Member By WorkspaceId  *****************************************/
   public getMemberByWorkspaceId = expressAsyncHandler(
     async (req: Request, res: Response) => {
@@ -276,41 +430,16 @@ class MemberController {
           },
         });
 
-        console.log("members", members);
-
-        //       const tasks = member.assignments
-        // .map(a => a.task)
-        // .filter(t => t !== null);
-
-        // Add task counts for each member
-        // const enrichedMembers = members.map((member) => {
-        //   const tasks = member.assignments.map((a) => a.task);
-
-        //   const totalTasks = tasks.length;
-
-        //   const completedTasks = tasks.filter(
-        //     (t) => t.status === "DONE"
-        //   ).length;
-
-        //   const overdueTasks = tasks.filter(
-        //     (t) =>
-        //       t.dueDate &&
-        //       new Date(t.dueDate) < new Date() &&
-        //       t.status !== "DONE"
-        //   ).length;
-
-        //   return {
-        //     ...member,
-        //     stats: {
-        //       totalTasks,
-        //       completedTasks,
-        //       overdueTasks,
-        //     },
-        //   };
-        // });
+        // Deduplicate: keep only the first member record per user
+        const seen = new Set<string>();
+        const uniqueMembers = members.filter((member) => {
+          if (seen.has(member.userId)) return false;
+          seen.add(member.userId);
+          return true;
+        });
 
         res.status(200).json({
-          data: members,
+          data: uniqueMembers,
           message: "Members with assigned tasks and stats fetched successfully",
         });
       } catch (err) {

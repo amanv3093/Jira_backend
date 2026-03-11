@@ -25,12 +25,14 @@ import project from "./routes/project.route";
 import task from "./routes/task.route";
 import member from "./routes/member.route";
 import common from "./routes/common.route";
+import dashboard from "./routes/dashboard.route";
 
 app.use("/api/v1/auth", auth);
 app.use("/api/v1/workspace", workspace);
 app.use("/api/v1/project", project);
 app.use("/api/v1/task", task);
 app.use("/api/v1/member", member);
+app.use("/api/v1/dashboard", dashboard);
 app.use("/api/v1", common);
 
 import { sendEmail } from "./utils/sendEmail";
@@ -44,5 +46,7 @@ app.get("/send",async () => {
   });
 });
 
-
+// app.listen(PORT, () => {
+//   console.log(`Server is running on port ${PORT}`);
+// });
 export default app;

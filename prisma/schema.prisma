@@ -53,6 +53,12 @@ model Workspace {
   profilePic   String?
   createdAt DateTime   @default(now())
 
+  // Billing
+  plan                  String   @default("FREE") // FREE or PRO
+  stripeCustomerId      String?
+  stripeSubscriptionId  String?
+  maxMembers            Int      @default(10)
+
   // Relations
   ownerId   String     @db.ObjectId
   owner     User       @relation("WorkspaceOwners", fields: [ownerId], references: [id])

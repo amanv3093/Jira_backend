@@ -87,9 +87,9 @@ class DashboardController {
           orderBy: { createdAt: "desc" },
         });
 
-        // Fetch members of this workspace
+        // Fetch workspace-level members only (not project-level duplicates)
         const members = await prisma.member.findMany({
-          where: { workspaceId },
+          where: { workspaceId, projectId: null },
           include: {
             user: {
               select: {
@@ -183,11 +183,13 @@ class DashboardController {
           dueDate: task.dueDate,
           createdAt: task.createdAt,
           project: task.project,
-          assignees: task.assignments.map((a) => ({
-            id: a.member.user.id,
-            name: a.member.user.full_name,
-            avatarUrl: a.member.user.avatarUrl,
-          })),
+          assignees: task.assignments
+            .filter((a, i, arr) => arr.findIndex((x) => x.member.user.id === a.member.user.id) === i)
+            .map((a) => ({
+              id: a.member.user.id,
+              name: a.member.user.full_name,
+              avatarUrl: a.member.user.avatarUrl,
+            })),
         }));
 
         // --- Member stats ---

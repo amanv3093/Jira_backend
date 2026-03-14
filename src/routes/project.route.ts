@@ -22,7 +22,7 @@ router
 router
   .route("/:id")
   .get(AuthMiddleware, getProjectById)
-  .put(AuthMiddleware, updateProject)
+  .put(AuthMiddleware, upload.single("profilePic"), updateProject)
   .delete(AuthMiddleware, deleteProject);
 
 router.route("/workspace/:id").get(AuthMiddleware, getProjectByWorkspaceId);

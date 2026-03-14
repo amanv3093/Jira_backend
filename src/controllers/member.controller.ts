@@ -12,15 +12,15 @@ class MemberController {
   public Invite = expressAsyncHandler(async (req: Request, res: Response) => {
     try {
       const user = req.user;
-      const { workspaceId, projectId, invites } = req.body;
+      const { workspaceId, invites } = req.body;
 
       if (!user) {
         res.status(401).json({ error: "User not authenticated" });
         return;
       }
 
-      if (!workspaceId && !projectId) {
-        res.status(400).json({ error: "workspaceId or projectId is required" });
+      if (!workspaceId) {
+        res.status(400).json({ error: "workspaceId is required" });
         return;
       }
 
@@ -29,17 +29,47 @@ class MemberController {
         return;
       }
 
-      const workspaceAuth = await prisma.workspace.findFirst({
-        where: {
-          id: workspaceId!,
-          members: {
-            some: { userId: user.id, role: { in: ["OWNER"] } },
-          },
-        },
+      // Only ADMIN, MANAGER, or workspace OWNER can invite
+      const isOwner = await prisma.member.findFirst({
+        where: { userId: user.id, workspaceId, role: "OWNER" },
       });
 
-      if (!workspaceAuth) {
-        res.status(403).json({ error: "Not authorized to invite users" });
+      const hasAdminOrManagerRole =
+        user.role === "ADMIN" || user.role === "MANAGER";
+
+      if (!isOwner && !hasAdminOrManagerRole) {
+        res
+          .status(403)
+          .json({
+            error: "Only admin, manager, or workspace owner can invite users",
+          });
+        return;
+      }
+
+      // Check member limit before inviting
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { plan: true, maxMembers: true },
+      });
+
+      if (!workspace) {
+        res.status(404).json({ error: "Workspace not found" });
+        return;
+      }
+
+      const allMembers = await prisma.member.findMany({
+        where: { workspaceId },
+        select: { userId: true },
+      });
+      const currentMemberCount = new Set(allMembers.map((m) => m.userId)).size;
+
+      if (currentMemberCount + invites.length > (workspace.maxMembers ?? 10)) {
+        res.status(403).json({
+          error: `Member limit reached. Your ${workspace.plan === "PRO" ? "Pro" : "Free"} plan allows ${workspace.maxMembers} members. Upgrade to add more.`,
+          code: "MEMBER_LIMIT_REACHED",
+          currentMembers: currentMemberCount,
+          maxMembers: workspace.maxMembers,
+        });
         return;
       }
 
@@ -47,18 +77,14 @@ class MemberController {
       const skippedInvites = [];
 
       for (const invite of invites) {
-        // Check if user is already a member
+        // Check if user is already a workspace member
         const existingUser = await prisma.user.findUnique({
           where: { email: invite.email },
         });
 
         if (existingUser) {
-          const memberWhere: any = { userId: existingUser.id };
-          if (workspaceId) memberWhere.workspaceId = workspaceId;
-          if (projectId) memberWhere.projectId = projectId;
-
           const existingMember = await prisma.member.findFirst({
-            where: memberWhere,
+            where: { userId: existingUser.id, workspaceId },
           });
 
           if (existingMember) {
@@ -70,12 +96,11 @@ class MemberController {
           }
         }
 
-        // Check if there's already a pending invite
+        // Check if there’s already a pending invite
         const existingInvite = await prisma.invite.findFirst({
           where: {
             email: invite.email,
-            ...(workspaceId && { workspaceId }),
-            ...(projectId && { projectId }),
+            workspaceId,
             expiresAt: { gt: new Date() },
           },
         });
@@ -92,8 +117,7 @@ class MemberController {
 
         const newInvite = await prisma.invite.create({
           data: {
-            workspaceId: workspaceId || null,
-            projectId: projectId || null,
+            workspaceId,
             createdById: user.id,
             email: invite.email,
             role: "CONTRIBUTOR",
@@ -104,17 +128,16 @@ class MemberController {
 
         await sendEmail({
           to: invite.email,
-          subject: `You’ve been invited to join a project`,
+          subject: `You’ve been invited to join a workspace`,
           html: `
     <div style="font-family: sans-serif;">
-      <h2>You're invited 🚀</h2>
+      <h2>You’re invited!</h2>
       <p>
-        You have been invited to join 
-        <strong>${projectId ? "this project" : "this workspace"}</strong>
+        You have been invited to join this workspace
         as a <strong>${invite.role}</strong>.
       </p>
 
-      <a 
+      <a
         href="${process.env.FRONTEND_URL}/join/${token}"
         style="display:inline-block;padding:10px 20px;
         background-color:#3b82f6;color:white;text-decoration:none;
@@ -172,32 +195,72 @@ class MemberController {
         return;
       }
 
-      const memberWhere: any = { userId: user.id };
-      if (invite.workspaceId) memberWhere.workspaceId = invite.workspaceId;
-      if (invite.projectId) memberWhere.projectId = invite.projectId;
+      if (!invite.workspaceId) {
+        res
+          .status(400)
+          .json({ error: "Invalid invite: no workspace associated" });
+        return;
+      }
 
       const existingMember = await prisma.member.findFirst({
-        where: memberWhere,
+        where: { userId: user.id, workspaceId: invite.workspaceId },
       });
 
       if (existingMember) {
         await prisma.invite.delete({ where: { token } });
         res.status(200).json({
-          message: "Already a member of this workspace/project",
+          message: "Already a member of this workspace",
         });
         return;
       }
 
+      // Check member limit before joining
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: invite.workspaceId },
+        select: { plan: true, maxMembers: true },
+      });
+
+      const allWsMembers = await prisma.member.findMany({
+        where: { workspaceId: invite.workspaceId },
+        select: { userId: true },
+      });
+      const currentMemberCount = new Set(allWsMembers.map((m) => m.userId)).size;
+
+      if (workspace && currentMemberCount >= (workspace.maxMembers ?? 10)) {
+        res.status(403).json({
+          error: "This workspace has reached its member limit. The workspace owner needs to upgrade the plan.",
+          code: "MEMBER_LIMIT_REACHED",
+        });
+        return;
+      }
+
+      // Create workspace-level member
       await prisma.member.create({
         data: {
           userId: user.id,
           workspaceId: invite.workspaceId,
-          projectId: invite.projectId,
           role: "CONTRIBUTOR",
         },
       });
 
-      // Optionally delete invite after use
+      // Add user to all existing projects in the workspace
+      const projects = await prisma.project.findMany({
+        where: { workspaceId: invite.workspaceId },
+        select: { id: true },
+      });
+
+      if (projects.length > 0) {
+        await prisma.member.createMany({
+          data: projects.map((project) => ({
+            userId: user.id,
+            workspaceId: invite.workspaceId,
+            projectId: project.id,
+            role: "CONTRIBUTOR",
+          })),
+        });
+      }
+
+      // Delete invite after use
       await prisma.invite.delete({ where: { token } });
 
       res.status(200).json({
@@ -223,7 +286,6 @@ class MemberController {
           where: { token },
           include: {
             workspace: { select: { id: true, name: true } },
-            project: { select: { id: true, name: true } },
           },
         });
 
@@ -233,12 +295,7 @@ class MemberController {
         }
 
         if (invite.expiresAt && invite.expiresAt < new Date()) {
-          // Option 1: Delete expired invite
           await prisma.invite.delete({ where: { token } });
-
-          // Option 2 (optional): mark it expired instead
-          // await prisma.invite.update({ where: { token }, data: { status: "EXPIRED" } });
-
           res.status(400).json({ error: "Invite link has expired" });
           return;
         }
@@ -247,15 +304,13 @@ class MemberController {
           message: "Invite verified successfully",
           data: {
             workspace: invite.workspace,
-            project: invite.project,
-            // invitedBy: invite.invitedBy,
           },
         });
       } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Internal server error" });
       }
-    }
+    },
   );
 
   //****************************************  Remove Member  *****************************************/
@@ -271,17 +326,27 @@ class MemberController {
           return;
         }
 
-        // Verify requester is OWNER of the workspace
+        // Verify requester is OWNER of the workspace OR has ADMIN/MANAGER user role
         const isOwner = await prisma.member.findFirst({
           where: { userId: user.id, workspaceId, role: "OWNER" },
         });
 
-        if (!isOwner) {
-          res.status(403).json({ error: "Only workspace owner can remove members" });
+        const hasAdminOrManagerRole =
+          user.role === "ADMIN" || user.role === "MANAGER";
+
+        if (!isOwner && !hasAdminOrManagerRole) {
+          res
+            .status(403)
+            .json({
+              error:
+                "Only admin, manager, or workspace owner can remove members",
+            });
           return;
         }
 
-        const member = await prisma.member.findUnique({ where: { id: memberId } });
+        const member = await prisma.member.findUnique({
+          where: { id: memberId },
+        });
 
         if (!member) {
           res.status(404).json({ error: "Member not found" });
@@ -290,7 +355,9 @@ class MemberController {
 
         // Cannot remove yourself as owner
         if (member.userId === user.id) {
-          res.status(400).json({ error: "Cannot remove yourself as workspace owner" });
+          res
+            .status(400)
+            .json({ error: "Cannot remove yourself as workspace owner" });
           return;
         }
 
@@ -307,7 +374,7 @@ class MemberController {
         console.error(err);
         res.status(500).json({ error: "Internal server error" });
       }
-    }
+    },
   );
 
   //****************************************  Update Member Role  *****************************************/
@@ -335,11 +402,15 @@ class MemberController {
         });
 
         if (!isOwner) {
-          res.status(403).json({ error: "Only workspace owner can update roles" });
+          res
+            .status(403)
+            .json({ error: "Only workspace owner can update roles" });
           return;
         }
 
-        const member = await prisma.member.findUnique({ where: { id: memberId } });
+        const member = await prisma.member.findUnique({
+          where: { id: memberId },
+        });
 
         if (!member) {
           res.status(404).json({ error: "Member not found" });
@@ -354,7 +425,9 @@ class MemberController {
         const updated = await prisma.member.update({
           where: { id: memberId },
           data: { role },
-          include: { user: { select: { id: true, full_name: true, email: true } } },
+          include: {
+            user: { select: { id: true, full_name: true, email: true } },
+          },
         });
 
         res.status(200).json({
@@ -365,7 +438,7 @@ class MemberController {
         console.error(err);
         res.status(500).json({ error: "Internal server error" });
       }
-    }
+    },
   );
 
   //****************************************  Get Member By WorkspaceId  *****************************************/
@@ -374,7 +447,7 @@ class MemberController {
       try {
         const user = req.user;
         const workspaceId = req.params.id;
-        console.log("workspaceId",workspaceId)
+        console.log("workspaceId", workspaceId);
 
         if (!workspaceId) {
           res.status(404).json({ error: "Workspace ID not found" });
@@ -446,7 +519,7 @@ class MemberController {
         console.error("❌ Error fetching members:", err);
         res.status(500).json({ error: "Internal server error" });
       }
-    }
+    },
   );
 }
 export default MemberController;

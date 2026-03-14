@@ -56,6 +56,7 @@ class ProjectController {
           },
         });
 
+        // Add the creator as project OWNER
         await prisma.member.create({
           data: {
             userId: user.id,
@@ -64,6 +65,27 @@ class ProjectController {
             role: "OWNER",
           },
         });
+
+        // Add all other workspace members to the new project
+        const workspaceMembers = await prisma.member.findMany({
+          where: {
+            workspaceId,
+            projectId: null,
+            userId: { not: user.id },
+          },
+          select: { userId: true, role: true },
+        });
+
+        if (workspaceMembers.length > 0) {
+          await prisma.member.createMany({
+            data: workspaceMembers.map((m) => ({
+              userId: m.userId,
+              workspaceId,
+              projectId: project.id,
+              role: m.role === "OWNER" ? "OWNER" : "CONTRIBUTOR",
+            })),
+          });
+        }
 
         res.status(201).json({
           data: project,
@@ -140,13 +162,33 @@ class ProjectController {
 
   //****************************************  Update  *****************************************/
   public updateProject = expressAsyncHandler(
-    async (req: Request, res: Response) => {
+    async (req: MulterRequest, res: Response) => {
       try {
         const { name, description } = updateProjectSchema.parse(req.body);
+        const user = req.user;
+
+        if (!user) {
+          res.status(401).json({ error: "User not authenticated" });
+          return;
+        }
+
+        const existing = await prisma.project.findUnique({
+          where: { id: req.params.id },
+        });
+
+        if (!existing) {
+          res.status(404).json({ error: "Project not found" });
+          return;
+        }
+
+        let profilePicUrl = existing.profilePic;
+        if (req.file) {
+          profilePicUrl = await uploadFile(req.file);
+        }
 
         const project = await prisma.project.update({
           where: { id: req.params.id },
-          data: { name, description },
+          data: { name, description, profilePic: profilePicUrl },
         });
 
         res.json({ data: project, message: "Project updated successfully" });
@@ -160,6 +202,7 @@ class ProjectController {
           });
           return;
         }
+        console.error("Project update error:", err);
         res.status(500).json({ error: "Internal server error" });
       }
     }

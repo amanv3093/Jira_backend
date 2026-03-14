@@ -13,7 +13,10 @@ app.use(cors({
   methods: ["GET","POST","PUT","DELETE","OPTIONS"],
 }));
 
-
+// Stripe webhook needs raw body — must be before express.json()
+import SubscriptionController from "./controllers/subscription.controller";
+const { handleWebhook } = new SubscriptionController();
+app.post("/api/v1/subscription/webhook", express.raw({ type: "application/json" }), handleWebhook);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -26,6 +29,7 @@ import task from "./routes/task.route";
 import member from "./routes/member.route";
 import common from "./routes/common.route";
 import dashboard from "./routes/dashboard.route";
+import subscription from "./routes/subscription.route";
 
 app.use("/api/v1/auth", auth);
 app.use("/api/v1/workspace", workspace);
@@ -33,6 +37,7 @@ app.use("/api/v1/project", project);
 app.use("/api/v1/task", task);
 app.use("/api/v1/member", member);
 app.use("/api/v1/dashboard", dashboard);
+app.use("/api/v1/subscription", subscription);
 app.use("/api/v1", common);
 
 import { sendEmail } from "./utils/sendEmail";

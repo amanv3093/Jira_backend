@@ -6,7 +6,7 @@
     "dev": "nodemon src/index.ts",
     "build": "prisma generate && tsc",
     "start": "node dist/index.js",
-    "vercel-build": "chmod +x node_modules/.bin/prisma && prisma generate && tsc"
+    "vercel-build": "chmod -R +x node_modules/.bin && prisma generate && tsc"
   },
   "keywords": [],
   "author": "",

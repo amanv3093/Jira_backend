@@ -87,9 +87,9 @@ class DashboardController {
           orderBy: { createdAt: "desc" },
         });
 
-        // Fetch workspace-level members only (not project-level duplicates)
+        // Fetch workspace members
         const members = await prisma.member.findMany({
-          where: { workspaceId, projectId: null },
+          where: { workspaceId },
           include: {
             user: {
               select: {
@@ -192,9 +192,21 @@ class DashboardController {
             })),
         }));
 
-        // --- Member stats ---
-        const memberStats = members.map((member) => {
-          const memberTasks = member.assignments.map((a) => a.task);
+        // --- Member stats (deduplicate by userId) ---
+        const uniqueMembersMap = new Map<string, typeof members[number]>();
+        for (const member of members) {
+          const existing = uniqueMembersMap.get(member.userId);
+          if (!existing) {
+            uniqueMembersMap.set(member.userId, member);
+          } else {
+            // Merge assignments from duplicate member records
+            existing.assignments.push(...member.assignments);
+          }
+        }
+
+        const memberStats = Array.from(uniqueMembersMap.values()).map((member) => {
+          const taskMap = new Map(member.assignments.map((a) => [a.task.id, a.task]));
+          const memberTasks = Array.from(taskMap.values());
           const total = memberTasks.length;
           const completed = memberTasks.filter(
             (t) => t.status === "DONE"

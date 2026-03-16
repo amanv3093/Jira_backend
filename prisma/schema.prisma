@@ -83,8 +83,9 @@ model Project {
   owner       User       @relation("ProjectOwners", fields: [ownerId], references: [id])
 
   tasks       Task[]
+  sprints     Sprint[]
   members     Member[]
-  invites     Invite[]    @relation("ProjectInvites") 
+  invites     Invite[]    @relation("ProjectInvites")
 }
 
 
@@ -115,6 +116,9 @@ model Task {
 
   createdById String       @db.ObjectId
   createdBy   User         @relation("TaskCreators", fields: [createdById], references: [id])
+
+  sprintId    String?      @db.ObjectId
+  sprint      Sprint?      @relation(fields: [sprintId], references: [id])
 
   assignments TaskAssignment[]
 }
@@ -185,4 +189,26 @@ enum MemberRole {
   OWNER
   CONTRIBUTOR
   VIEWER
+}
+
+enum SprintStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+}
+
+model Sprint {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  status      SprintStatus @default(PLANNING)
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  projectId   String       @db.ObjectId
+  project     Project      @relation(fields: [projectId], references: [id])
+
+  tasks       Task[]
 }

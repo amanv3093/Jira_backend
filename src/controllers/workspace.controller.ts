@@ -127,6 +127,16 @@ class WorkspaceController {
           },
         });
 
+        // Deduplicate: keep only the first member record per user
+        if (workspaces && workspaces.members) {
+          const seen = new Set<string>();
+          workspaces.members = workspaces.members.filter((member) => {
+            if (seen.has(member.userId)) return false;
+            seen.add(member.userId);
+            return true;
+          });
+        }
+
         res.status(200).json({
           data: workspaces,
           message: "Workspaces fetched successfully",

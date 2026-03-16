@@ -1,10 +1,11 @@
 import expressAsyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-// import { prisma } from "../lib/prisma";
 import { createWorkspaceSchema } from "../type/workspace.type";
 import { PrismaClient, User } from "@prisma/client";
 import { ZodError } from "zod";
 import { TaskEditSchema, TaskSchema } from "../type/task.zod";
+import { sendEmail } from "../utils/sendEmail";
+import { taskAssignedEmail } from "../utils/emailTemplates";
 
 // Extend Express Request interface to include user property
 
@@ -24,12 +25,18 @@ class TaskController {
             .json({ error: "User not authenticated", status: 401 });
           return;
         }
-        console.log("assignments", assignments);
-        const memberRecords = await prisma.member.findMany({
+        const allMemberRecords = await prisma.member.findMany({
           where: {
             userId: { in: assignments.map((a) => a.userId) },
-            // projectId,
           },
+        });
+
+        // Deduplicate: keep only one member record per userId
+        const seenUserIds = new Set<string>();
+        const memberRecords = allMemberRecords.filter((m) => {
+          if (seenUserIds.has(m.userId)) return false;
+          seenUserIds.add(m.userId);
+          return true;
         });
 
         if (memberRecords.length === 0) {
@@ -48,8 +55,13 @@ class TaskController {
           },
         });
 
-        console.log("memberRecords", memberRecords);
         if (memberRecords.length > 0) {
+          // Get project info for the email
+          const project = await prisma.project.findUnique({
+            where: { id: projectId },
+            include: { workspace: true },
+          });
+
           for (const m of memberRecords) {
             await prisma.taskAssignment.create({
               data: {
@@ -57,6 +69,35 @@ class TaskController {
                 memberId: m.id,
               },
             });
+          }
+
+          // Send assignment emails (non-blocking)
+          const assignedMembers = await prisma.member.findMany({
+            where: { id: { in: memberRecords.map((m) => m.id) } },
+            include: { user: true },
+          });
+
+          const assignerName = user.full_name || "Someone";
+          const taskUrl = `${process.env.FRONTEND_URL}/workspace/${project?.workspaceId}/task`;
+
+          for (const m of assignedMembers) {
+            if (m.user?.email) {
+              sendEmail({
+                to: m.user.email,
+                subject: `New task assigned: ${task_name}`,
+                html: taskAssignedEmail(
+                  m.user.first_name || m.user.full_name,
+                  task_name,
+                  project?.name || "Unknown Project",
+                  priority || "MEDIUM",
+                  dueDate,
+                  assignerName,
+                  taskUrl
+                ),
+              }).catch((err) =>
+                console.error("Task assignment email failed:", err)
+              );
+            }
           }
         }
 
@@ -317,20 +358,72 @@ class TaskController {
 
       // Update task assignments if provided
       if (updateData.assignments && Array.isArray(updateData.assignments)) {
+        // Get existing assignment member IDs
+        const oldAssignmentMemberIds = existingTask.assignments.map(
+          (a) => a.memberId
+        );
+
         // Delete old assignments
         await prisma.taskAssignment.deleteMany({ where: { taskId: id } });
 
-        // Add new ones
-        const memberRecords = await prisma.member.findMany({
+        // Add new ones (deduplicated by userId)
+        const allMemberRecords = await prisma.member.findMany({
           where: {
             userId: { in: updateData.assignments.map((a) => a.userId) },
           },
+        });
+
+        const seenUserIds = new Set<string>();
+        const memberRecords = allMemberRecords.filter((m) => {
+          if (seenUserIds.has(m.userId)) return false;
+          seenUserIds.add(m.userId);
+          return true;
         });
 
         for (const m of memberRecords) {
           await prisma.taskAssignment.create({
             data: { taskId: id, memberId: m.id },
           });
+        }
+
+        // Send email to newly assigned members only (non-blocking)
+        const newMemberIds = memberRecords
+          .filter((m) => !oldAssignmentMemberIds.includes(m.id))
+          .map((m) => m.id);
+
+        if (newMemberIds.length > 0) {
+          const project = await prisma.project.findUnique({
+            where: { id: updatedTask.projectId },
+            include: { workspace: true },
+          });
+
+          const newMembers = await prisma.member.findMany({
+            where: { id: { in: newMemberIds } },
+            include: { user: true },
+          });
+
+          const assignerName = user.full_name || "Someone";
+          const taskUrl = `${process.env.FRONTEND_URL}/workspace/${project?.workspaceId}/task`;
+
+          for (const m of newMembers) {
+            if (m.user?.email) {
+              sendEmail({
+                to: m.user.email,
+                subject: `New task assigned: ${updatedTask.task_name}`,
+                html: taskAssignedEmail(
+                  m.user.first_name || m.user.full_name,
+                  updatedTask.task_name,
+                  project?.name || "Unknown Project",
+                  updatedTask.priority || "MEDIUM",
+                  updatedTask.dueDate?.toISOString() || null,
+                  assignerName,
+                  taskUrl
+                ),
+              }).catch((err) =>
+                console.error("Task assignment email failed:", err)
+              );
+            }
+          }
         }
       }
 

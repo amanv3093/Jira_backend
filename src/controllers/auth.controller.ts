@@ -7,6 +7,7 @@ import crypto from "crypto";
 import { loginSchema, signupSchema } from "../lib/validation";
 import { sendResponse } from "../utils/api-response";
 import { sendEmail } from "../utils/sendEmail";
+import { welcomeEmail, passwordResetEmail } from "../utils/emailTemplates";
 
 class AuthController {
   //****************************************  Login  *****************************************/
@@ -104,6 +105,14 @@ class AuthController {
       },
     });
 
+    // Send welcome email (non-blocking)
+    const loginUrl = `${process.env.CLIENT_URL}/sign-in`;
+    sendEmail({
+      to: user.email,
+      subject: "Welcome to TaskFlow!",
+      html: welcomeEmail(first_name, loginUrl),
+    }).catch((err) => console.error("Welcome email failed:", err));
+
     res.status(201).json({ user });
   });
   //****************************************  Forgot Password  *****************************************/
@@ -138,20 +147,8 @@ class AuthController {
 
     await sendEmail({
       to: email,
-      subject: "Reset your password",
-      html: `
-        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-          <h2 style="color: #1a1a1a;">Reset Your Password</h2>
-          <p style="color: #666;">Hi ${user.first_name},</p>
-          <p style="color: #666;">We received a request to reset your password. Click the button below to set a new one.</p>
-          <a href="${resetUrl}"
-             style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white;
-                    text-decoration: none; border-radius: 8px; font-weight: 600; margin: 16px 0;">
-            Reset Password
-          </a>
-          <p style="color: #999; font-size: 14px;">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
-        </div>
-      `,
+      subject: "Reset your password - TaskFlow",
+      html: passwordResetEmail(user.first_name, resetUrl),
     });
 
     res.status(200).json({
@@ -228,6 +225,14 @@ class AuthController {
           isEmailVerified: true,
         },
       });
+
+      // Send welcome email for new Google users (non-blocking)
+      const loginUrl = `${process.env.CLIENT_URL}/sign-in`;
+      sendEmail({
+        to: user.email,
+        subject: "Welcome to TaskFlow!",
+        html: welcomeEmail(user.first_name, loginUrl),
+      }).catch((err) => console.error("Welcome email failed:", err));
     }
 
     const accessToken = signAccessToken({

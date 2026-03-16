@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { ZodError } from "zod";
 import { sendEmail } from "../utils/sendEmail";
+import { workspaceInviteEmail } from "../utils/emailTemplates";
 
 // Extend Express Request interface to include user property
 
@@ -49,7 +50,7 @@ class MemberController {
       // Check member limit before inviting
       const workspace = await prisma.workspace.findUnique({
         where: { id: workspaceId },
-        select: { plan: true, maxMembers: true },
+        select: { name: true, plan: true, maxMembers: true },
       });
 
       if (!workspace) {
@@ -126,30 +127,11 @@ class MemberController {
           },
         });
 
+        const inviteUrl = `${process.env.FRONTEND_URL}/join/${token}`;
         await sendEmail({
           to: invite.email,
-          subject: `You’ve been invited to join a workspace`,
-          html: `
-    <div style="font-family: sans-serif;">
-      <h2>You’re invited!</h2>
-      <p>
-        You have been invited to join this workspace
-        as a <strong>${invite.role}</strong>.
-      </p>
-
-      <a
-        href="${process.env.FRONTEND_URL}/join/${token}"
-        style="display:inline-block;padding:10px 20px;
-        background-color:#3b82f6;color:white;text-decoration:none;
-        border-radius:6px;font-weight:bold;margin-top:10px;">
-        Accept Invite
-      </a>
-
-      <p style="margin-top: 20px;color:#666;">
-        This link will expire in 7 days.
-      </p>
-    </div>
-  `,
+          subject: `You’ve been invited to join ${workspace.name} on TaskFlow`,
+          html: workspaceInviteEmail(invite.role, inviteUrl, workspace.name),
         });
 
         createdInvites.push({

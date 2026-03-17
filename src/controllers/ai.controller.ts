@@ -1,165 +1,177 @@
 import expressAsyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import {
-  GoogleGenerativeAI,
-  SchemaType,
-} from "@google/generative-ai";
+import { HfInference } from "@huggingface/inference";
 
 const prisma = new PrismaClient();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const hf = new HfInference(process.env.HUGGINGFACE_API_KEY || "");
+const MODEL_ID = "Qwen/QwQ-32B";
 
-const tools = [
+const tools: any[] = [
   {
-    functionDeclarations: [
-      {
-        name: "create_task",
-        description:
-          "Create a new task in a project. Use this when the user wants to create a task.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            task_name: {
-              type: SchemaType.STRING,
-              description: "The name/title of the task",
-            },
-            projectId: {
-              type: SchemaType.STRING,
-              description: "The project ID to create the task in",
-            },
-            status: {
-              type: SchemaType.STRING,
-              description:
-                "Task status: BACKLOG, TODO, IN_PROGRESS, IN_REVIEW, or DONE. Defaults to BACKLOG",
-            },
-            priority: {
-              type: SchemaType.STRING,
-              description:
-                "Task priority: LOW, MEDIUM, HIGH, or CRITICAL. Defaults to MEDIUM",
-            },
-            dueDate: {
-              type: SchemaType.STRING,
-              description:
-                "Due date in ISO format. Defaults to 7 days from now",
-            },
-            assigneeNames: {
-              type: SchemaType.ARRAY,
-              items: { type: SchemaType.STRING },
-              description:
-                "Array of member names to assign. Match against workspace members.",
-            },
+    type: "function",
+    function: {
+      name: "create_task",
+      description:
+        "Create a new task in a project. Use this when the user wants to create a task.",
+      parameters: {
+        type: "object",
+        properties: {
+          task_name: {
+            type: "string",
+            description: "The name/title of the task",
           },
-          required: ["task_name", "projectId"],
-        },
-      },
-      {
-        name: "create_project",
-        description:
-          "Create a new project in the workspace. Use this when the user wants to create a project.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            name: {
-              type: SchemaType.STRING,
-              description: "The project name",
-            },
-            description: {
-              type: SchemaType.STRING,
-              description: "Optional project description",
-            },
+          projectId: {
+            type: "string",
+            description: "The project ID to create the task in",
           },
-          required: ["name"],
-        },
-      },
-      {
-        name: "get_tasks",
-        description:
-          "Get tasks from the workspace with optional filters. Use this to answer questions about tasks.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            status: {
-              type: SchemaType.STRING,
-              description:
-                "Filter by status (comma-separated): BACKLOG,TODO,IN_PROGRESS,IN_REVIEW,DONE",
-            },
-            priority: {
-              type: SchemaType.STRING,
-              description:
-                "Filter by priority (comma-separated): LOW,MEDIUM,HIGH,CRITICAL",
-            },
-            projectId: {
-              type: SchemaType.STRING,
-              description: "Filter by project ID",
-            },
-            search: {
-              type: SchemaType.STRING,
-              description: "Search by task name",
-            },
+          status: {
+            type: "string",
+            description:
+              "Task status: BACKLOG, TODO, IN_PROGRESS, IN_REVIEW, or DONE. Defaults to BACKLOG",
+          },
+          priority: {
+            type: "string",
+            description:
+              "Task priority: LOW, MEDIUM, HIGH, or CRITICAL. Defaults to MEDIUM",
+          },
+          dueDate: {
+            type: "string",
+            description:
+              "Due date in ISO format. Defaults to 7 days from now",
+          },
+          assigneeNames: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Array of member names to assign. Match against workspace members.",
           },
         },
+        required: ["task_name", "projectId"],
       },
-      {
-        name: "update_task",
-        description:
-          "Update an existing task. Use this when the user wants to change a task's status, priority, name, or assignees.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            taskId: {
-              type: SchemaType.STRING,
-              description: "The task ID to update",
-            },
-            task_name: {
-              type: SchemaType.STRING,
-              description: "New task name",
-            },
-            status: {
-              type: SchemaType.STRING,
-              description: "New status",
-            },
-            priority: {
-              type: SchemaType.STRING,
-              description: "New priority",
-            },
-            dueDate: {
-              type: SchemaType.STRING,
-              description: "New due date in ISO format",
-            },
-            assigneeNames: {
-              type: SchemaType.ARRAY,
-              items: { type: SchemaType.STRING },
-              description: "New assignee names (replaces current)",
-            },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_project",
+      description:
+        "Create a new project in the workspace. Use this when the user wants to create a project.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "The project name",
           },
-          required: ["taskId"],
-        },
-      },
-      {
-        name: "delete_task",
-        description: "Delete a task by ID.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            taskId: {
-              type: SchemaType.STRING,
-              description: "The task ID to delete",
-            },
+          description: {
+            type: "string",
+            description: "Optional project description",
           },
-          required: ["taskId"],
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_tasks",
+      description:
+        "Get tasks from the workspace with optional filters. Use this to answer questions about tasks.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: {
+            type: "string",
+            description:
+              "Filter by status (comma-separated): BACKLOG,TODO,IN_PROGRESS,IN_REVIEW,DONE",
+          },
+          priority: {
+            type: "string",
+            description:
+              "Filter by priority (comma-separated): LOW,MEDIUM,HIGH,CRITICAL",
+          },
+          projectId: {
+            type: "string",
+            description: "Filter by project ID",
+          },
+          search: {
+            type: "string",
+            description: "Search by task name",
+          },
         },
       },
-      {
-        name: "get_workspace_stats",
-        description:
-          "Get workspace dashboard statistics including project counts, task counts, overdue tasks, member stats, etc.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {},
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_task",
+      description:
+        "Update an existing task. Use this when the user wants to change a task's status, priority, name, or assignees.",
+      parameters: {
+        type: "object",
+        properties: {
+          taskId: {
+            type: "string",
+            description: "The task ID to update",
+          },
+          task_name: {
+            type: "string",
+            description: "New task name",
+          },
+          status: {
+            type: "string",
+            description: "New status",
+          },
+          priority: {
+            type: "string",
+            description: "New priority",
+          },
+          dueDate: {
+            type: "string",
+            description: "New due date in ISO format",
+          },
+          assigneeNames: {
+            type: "array",
+            items: { type: "string" },
+            description: "New assignee names (replaces current)",
+          },
         },
+        required: ["taskId"],
       },
-    ],
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_task",
+      description: "Delete a task by ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          taskId: {
+            type: "string",
+            description: "The task ID to delete",
+          },
+        },
+        required: ["taskId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_workspace_stats",
+      description:
+        "Get workspace dashboard statistics including project counts, task counts, overdue tasks, member stats, etc.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
   },
 ];
 
@@ -479,8 +491,8 @@ class AIController {
         return;
       }
 
-      if (!process.env.GEMINI_API_KEY) {
-        res.status(500).json({ error: "GEMINI_API_KEY is not configured" });
+      if (!process.env.HUGGINGFACE_API_KEY) {
+        res.status(500).json({ error: "HUGGINGFACE_API_KEY is not configured" });
         return;
       }
 
@@ -510,61 +522,78 @@ IMPORTANT RULES:
 8. Current user: ${user.full_name} (${user.email})
 9. Today's date: ${new Date().toISOString().split("T")[0]}`;
 
-      const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        tools: tools as any,
-        systemInstruction: systemPrompt,
-      });
-
-      // Build chat history
-      const chatHistory = (history || []).map((msg: any) => ({
-        role: msg.role === "user" ? "user" : "model",
-        parts: [{ text: msg.content }],
-      }));
-
-      const chat = model.startChat({ history: chatHistory });
-
-      let result = await chat.sendMessage(message);
-      let response = result.response;
+      // Build messages array in OpenAI-compatible format
+      const messages: any[] = [
+        { role: "system", content: systemPrompt },
+        ...(history || []).map((msg: any) => ({
+          role: msg.role === "user" ? "user" : "assistant",
+          content: msg.content,
+        })),
+        { role: "user", content: message },
+      ];
 
       // Process function calls in a loop
       const actionsPerformed: any[] = [];
       let maxIterations = 5;
 
-      while (maxIterations-- > 0) {
-        const candidate = response.candidates?.[0];
-        const parts = candidate?.content?.parts || [];
-        const fnCall = parts.find((p: any) => p.functionCall);
+      while (maxIterations-- >= 0) {
+        const completion = await hf.chatCompletion({
+          model: MODEL_ID,
+          messages,
+          tools,
+          max_tokens: 2048,
+        });
 
-        if (!fnCall?.functionCall) break;
+        const choice = completion.choices[0];
+        const assistantMessage = choice.message;
 
-        const { name, args } = fnCall.functionCall;
-        const fnResult = await executeFunction(
-          name,
-          args || {},
-          workspaceId,
-          user.id
-        );
+        // Add assistant message to conversation
+        messages.push(assistantMessage);
 
-        actionsPerformed.push({ function: name, args, result: fnResult });
-
-        // Send function result back to Gemini
-        result = await chat.sendMessage([
-          {
-            functionResponse: {
-              name,
-              response: fnResult,
+        // If no tool calls, return the text response
+        if (!assistantMessage.tool_calls?.length) {
+          const text = assistantMessage.content || "";
+          res.status(200).json({
+            data: {
+              reply: text,
+              actions: actionsPerformed,
             },
-          },
-        ]);
-        response = result.response;
+            message: "AI response generated",
+          });
+          return;
+        }
+
+        // Execute each tool call and add results to messages
+        for (const toolCall of assistantMessage.tool_calls) {
+          const fnName = toolCall.function.name;
+          const fnArgs = JSON.parse(toolCall.function.arguments || "{}");
+
+          const fnResult = await executeFunction(
+            fnName,
+            fnArgs,
+            workspaceId,
+            user.id
+          );
+
+          actionsPerformed.push({
+            function: fnName,
+            args: fnArgs,
+            result: fnResult,
+          });
+
+          // Send tool result back for the next iteration
+          messages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(fnResult),
+          });
+        }
       }
 
-      const text = response.text();
-
+      // If we exhausted iterations, return what we have
       res.status(200).json({
         data: {
-          reply: text,
+          reply: "I performed several actions but reached my processing limit. Please check the results.",
           actions: actionsPerformed,
         },
         message: "AI response generated",

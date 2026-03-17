@@ -85,8 +85,8 @@ class SubscriptionController {
           metadata: {
             workspaceId: workspace.id,
           },
-          success_url: `${process.env.FRONTEND_URL}workspace/${workspaceId}/settings?billing=success&session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${process.env.FRONTEND_URL}workspace/${workspaceId}/settings?billing=cancelled`,
+          success_url: `${process.env.FRONTEND_URL}workspace/${workspaceId}/billing?billing=success&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.FRONTEND_URL}workspace/${workspaceId}/billing?billing=cancelled`,
         });
 
         res.status(200).json({
@@ -259,7 +259,7 @@ class SubscriptionController {
 
         const portalSession = await stripe.billingPortal.sessions.create({
           customer: workspace.stripeCustomerId,
-          return_url: `${process.env.FRONTEND_URL}workspace/${workspaceId}/settings`,
+          return_url: `${process.env.FRONTEND_URL}workspace/${workspaceId}/billing`,
         });
 
         res.status(200).json({

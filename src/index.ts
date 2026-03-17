@@ -32,6 +32,7 @@ import dashboard from "./routes/dashboard.route";
 import subscription from "./routes/subscription.route";
 import user from "./routes/user.route";
 import sprint from "./routes/sprint.route";
+import ai from "./routes/ai.route";
 
 app.use("/api/v1/auth", auth);
 app.use("/api/v1/workspace", workspace);
@@ -42,6 +43,7 @@ app.use("/api/v1/dashboard", dashboard);
 app.use("/api/v1/subscription", subscription);
 app.use("/api/v1/user", user);
 app.use("/api/v1/sprint", sprint);
+app.use("/api/v1/ai", ai);
 app.use("/api/v1", common);
 
 import { sendEmail } from "./utils/sendEmail";
